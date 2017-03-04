@@ -3,6 +3,30 @@
 Simple tool to replicate one Redis to another.
 
 ### How do I use it?
+```
+Usage of redis-sync:
+  -read-concurrency int
+    	source Redis read concurrency (default 10)
+  -replace
+    	replace existing keys on target
+  -source string
+    	source Redis host (default localhost:6379) (default "redis://127.0.0.1:6379")
+  -source-database int
+    	source Redis DB (default 0)
+  -target string
+    	target Redis database
+  -target-database int
+    	target Redis DB (default 0)
+  -write-concurrency int
+    	target Redis write concurrency (default 10)
+```
+
+**Example**
+
+```
+# Sync local redis db 0 to remote Redis db 0
+redis-sync --target redis://username:password@192.168.1.100:6397
+```
 
 ### How does it work?
 
