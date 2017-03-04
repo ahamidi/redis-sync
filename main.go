@@ -17,7 +17,7 @@ type redisKey struct {
 	Value string
 }
 
-var sourceRedis = flag.String("source", "redis://localhost:6379", "source Redis host (default localhost:6379)")
+var sourceRedis = flag.String("source", "redis://127.0.0.1:6379", "source Redis host (default localhost:6379)")
 var sourceDB = flag.Int("source-database", 0, "source Redis DB (default 0)")
 var targetRedis = flag.String("target", "", "target Redis database")
 var targetDB = flag.Int("target-database", 0, "target Redis DB (default 0)")
@@ -28,7 +28,7 @@ func main() {
 	flag.Parse()
 
 	// Connect to source
-	srcPool := newPoolFromURL(*sourceRedis, *targetPoolSize)
+	srcPool := newPoolFromURL(*sourceRedis, *targetPoolSize+1)
 	srcRedis := srcPool.Get()
 
 	// Select database
@@ -45,16 +45,18 @@ func main() {
 	}(errChan)
 
 	// Read Keys
-	keyChan, _ := keyReader(srcRedis)
+	keyChan, err := keyReader(srcRedis)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	valueReaderWG := &sync.WaitGroup{}
 
 	// Read Values
 	rkeyChan := make(chan *redisKey, keyReaderBufferSize)
 	for i := 0; i < *targetPoolSize; i++ {
-		log.Println("spinning up value reader")
 		valueReaderWG.Add(1)
-		go valueReader(keyChan, rkeyChan, srcPool, nil, valueReaderWG)
+		go valueReader(keyChan, rkeyChan, srcPool, errChan, valueReaderWG)
 	}
 
 	// Connect to target
@@ -68,12 +70,15 @@ func main() {
 	writerWG := &sync.WaitGroup{}
 	for i := 0; i < *targetPoolSize; i++ {
 		writerWG.Add(1)
-		go keyWriter(rkeyChan, targetPool, nil, writerWG)
+		go keyWriter(rkeyChan, targetPool, errChan, writerWG)
 	}
 
 	valueReaderWG.Wait()
+	close(rkeyChan)
 	writerWG.Wait()
 	s.Stop()
+
+	close(errChan)
 
 }
 
@@ -85,10 +90,10 @@ func keyReader(c redis.Conn) (chan string, error) {
 		keys, err := redis.Strings(c.Do("KEYS", "*"))
 		if err != nil {
 			//return err
+			log.Println("key read error:", err)
 		}
 
 		for _, k := range keys {
-			log.Println("!")
 			keyChan <- k
 		}
 
@@ -101,8 +106,10 @@ func keyReader(c redis.Conn) (chan string, error) {
 
 func valueReader(keys chan string, rkeys chan *redisKey, p *redis.Pool, errChan chan error, wg *sync.WaitGroup) {
 	conn := p.Get()
+	if *sourceDB != 0 {
+		conn.Do("SELECT", *sourceDB)
+	}
 	for k := range keys {
-		log.Println("!!")
 		rk, err := dumpKey(conn, k)
 		if err != nil {
 			errChan <- err
@@ -115,9 +122,9 @@ func valueReader(keys chan string, rkeys chan *redisKey, p *redis.Pool, errChan 
 
 }
 
-func keyWriter(k chan *redisKey, p *redis.Pool, errChan chan error, wg *sync.WaitGroup) {
+func keyWriter(keys chan *redisKey, p *redis.Pool, errChan chan error, wg *sync.WaitGroup) {
 	conn := p.Get()
-	for k := range k {
+	for k := range keys {
 		err := restoreKey(conn, k, *replaceKeys)
 		if err != nil {
 			log.Println("Error:", err)
