@@ -21,6 +21,7 @@ var sourceRedis = flag.String("source", "redis://127.0.0.1:6379", "source Redis 
 var sourceDB = flag.Int("source-database", 0, "source Redis DB (default 0)")
 var targetRedis = flag.String("target", "", "target Redis database")
 var targetDB = flag.Int("target-database", 0, "target Redis DB (default 0)")
+var sourcePoolSize = flag.Int("read-concurrency", 10, "source Redis read concurrency")
 var targetPoolSize = flag.Int("write-concurrency", 10, "target Redis write concurrency")
 var replaceKeys = flag.Bool("replace", false, "replace existing keys on target")
 
@@ -28,7 +29,7 @@ func main() {
 	flag.Parse()
 
 	// Connect to source
-	srcPool := newPoolFromURL(*sourceRedis, *targetPoolSize+1)
+	srcPool := newPoolFromURL(*sourceRedis, *sourcePoolSize+1)
 	srcRedis := srcPool.Get()
 
 	// Select database
@@ -54,7 +55,7 @@ func main() {
 
 	// Read Values
 	rkeyChan := make(chan *redisKey, keyReaderBufferSize)
-	for i := 0; i < *targetPoolSize; i++ {
+	for i := 0; i < *sourcePoolSize; i++ {
 		valueReaderWG.Add(1)
 		go valueReader(keyChan, rkeyChan, srcPool, errChan, valueReaderWG)
 	}
