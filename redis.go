@@ -31,14 +31,18 @@ func dumpKey(c redis.Conn, key string) (*redisKey, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &redisKey{key, value}, nil
+	return &redisKey{key, value, 0}, nil
 }
 
 func restoreKey(c redis.Conn, rk *redisKey, replace bool) error {
 	if replace {
-		_, err := c.Do("RESTORE", rk.Key, 0, rk.Value, "REPLACE")
+		_, err := c.Do("RESTORE", rk.Key, rk.TTL, rk.Value, "REPLACE")
 		return err
 	}
-	_, err := c.Do("RESTORE", rk.Key, 0, rk.Value)
+	_, err := c.Do("RESTORE", rk.Key, rk.TTL, rk.Value)
 	return err
+}
+
+func getTTL(c redis.Conn, key string) (int, error) {
+	return redis.Int(c.Do("PTTL", key))
 }

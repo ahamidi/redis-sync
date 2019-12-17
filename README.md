@@ -2,6 +2,15 @@
 
 Simple tool to replicate one Redis to another.
 
+### Download Binary or Build
+
+You can find binaries for all major platforms under [Releases](https://github.com/ahamidi/redis-sync/releases)
+
+Alternatively you can build from source using the following command:
+```
+go get -u . && go build ./...
+```
+
 ### How do I use it?
 ```
 Usage of redis-sync:
@@ -19,6 +28,8 @@ Usage of redis-sync:
     	target Redis DB (default 0)
   -write-concurrency int
     	target Redis write concurrency (default 10)
+  -sync-ttl
+    	copy TTL times (default false)
 ```
 
 **Example**

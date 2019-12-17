@@ -15,6 +15,7 @@ const keyReaderBufferSize = 500
 type redisKey struct {
 	Key   string
 	Value string
+	TTL   int
 }
 
 var sourceRedis = flag.String("source", "redis://127.0.0.1:6379", "source Redis host (default localhost:6379)")
@@ -24,6 +25,7 @@ var targetDB = flag.Int("target-database", 0, "target Redis DB (default 0)")
 var sourcePoolSize = flag.Int("read-concurrency", 10, "source Redis read concurrency")
 var targetPoolSize = flag.Int("write-concurrency", 10, "target Redis write concurrency")
 var replaceKeys = flag.Bool("replace", false, "replace existing keys on target")
+var syncTTL = flag.Bool("sync-ttl", false, "copy key TTLs")
 
 func main() {
 	flag.Parse()
@@ -114,6 +116,16 @@ func valueReader(keys chan string, rkeys chan *redisKey, p *redis.Pool, errChan 
 		rk, err := dumpKey(conn, k)
 		if err != nil {
 			errChan <- err
+			continue
+		}
+
+		if *syncTTL {
+			ttl, err := getTTL(conn, k)
+			if err != nil {
+				errChan <- err
+				continue
+			}
+			rk.TTL = ttl
 		}
 
 		rkeys <- rk
